@@ -25,6 +25,7 @@ class SDModule_(BaseSegmentor):
             self.use_teacher = False
         else:
             self.use_teacher = True
+
         if 'selective' in distillation:
             self.selective = distillation['selective']
         else:
@@ -41,10 +42,10 @@ class SDModule_(BaseSegmentor):
         self.student = builder.build_segmentor(
             cfg, train_cfg=train_cfg, test_cfg=test_cfg)
         self.student_init(strategy='use_pretrain',s_pretrain=s_pretrain,t_pretrain=t_pretrain)
-
-        self.features = Extractor(self.student,self.teacher,distillation.layers)
         
-        self.loss = DistillationLoss_(distillation = distillation,tau=1)
+        if self.use_teacher:
+            self.features = Extractor(self.student,self.teacher)
+            self.loss = DistillationLoss_(distillation = distillation,tau=1)
         self.align_corners = False
         self.test_mode = 'whole'
 
@@ -54,23 +55,22 @@ class SDModule_(BaseSegmentor):
             with torch.no_grad():
                 _ = self.teacher(img, img_metas, return_loss=True, gt_semantic_seg=gt_semantic_seg)
             del _
-
-        softs_fea = []
-        preds_fea = []
-
-        for i in range(len(self.features.teacher_features)):
-            pred = self.features.student_features[i]
-            soft = self.features.teacher_features[i]
-            softs_fea.append(soft)
-            preds_fea.append(pred)
-            
-        if self.selective != 'none':
-            loss_dict = self.loss(softs_fea, preds_fea, loss_dict,gt_semantic_seg)
         else:
-            pass
+            return loss_dict
 
-        self.features.student_features = []
-        self.features.teacher_features = []
+        loss_dict = self.loss(self.features.teacher_features, 
+                            self.features.student_features,
+                            self.features.teacher_attns,
+                            self.features.student_attns,
+                            loss_dict,
+                            gt_semantic_seg)
+
+
+        self.features.teacher_features = [[] for i in range(4)]
+        self.features.student_features = [[] for i in range(4)]
+
+        self.features.teacher_attns = [[] for i in range(4)]
+        self.features.student_attns = [[] for i in range(4)]
         return loss_dict
     
     def student_init(self,strategy,s_pretrain=None,t_pretrain=None,distillation=None):

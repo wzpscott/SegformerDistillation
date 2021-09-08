@@ -9,6 +9,7 @@ from .resnext import ResNeXt
 from .unet import UNet
 from .swin_transformer import SwinTransformer
 from .mix_transformer import *
+from .efficient_mix_transformer import *
 
 __all__ = [
     'ResNet', 'ResNetV1c', 'ResNetV1d', 'ResNeXt', 'HRNet', 'FastSCNN',
